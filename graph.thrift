@@ -48,5 +48,8 @@ service Operations
 	string listNeighboringVertex(1:i32 name),
 
 	Vertex getVertex(1:i32 name),
-	Edge getEdge(1:i32 v1,2:i32 v2)
+	Edge getEdge(1:i32 v1,2:i32 v2),
+
+	void saveGraph(1:string fileName),
+	Graph readGraph(1:string fileName)
  }

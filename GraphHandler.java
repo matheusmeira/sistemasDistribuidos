@@ -3,12 +3,14 @@ import org.apache.thrift.TException;
 import java.util.ArrayList;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 
 import graph.*;
 
 public class GraphHandler implements Operations.Iface {
 
-    private Graph graph = new Graph(new ArrayList<Vertex>(), new ArrayList<Edge>());
+    private Graph graph = initialHandler();
 
     public boolean newVertex(int name, int color, double weight, String desc) {
         Vertex newVertexToGraph = new Vertex();
@@ -22,10 +24,13 @@ public class GraphHandler implements Operations.Iface {
             newVertexToGraph.desc = desc;
 
             graph.addToV(newVertexToGraph);
+            saveGraph("dataBase");
         } else {
-            for ( Vertex vertexAux: graph.getV() ) {
-                if ( vertexAux.name == name ) {
-                    return false;
+            synchronized(graph.getV()) {
+                for ( Vertex vertexAux: graph.getV() ) {
+                    if ( vertexAux.name == name ) {
+                        return false;
+                    }
                 }
             }
 
@@ -35,28 +40,98 @@ public class GraphHandler implements Operations.Iface {
             newVertexToGraph.desc = desc;
 
             graph.addToV(newVertexToGraph);
+            saveGraph("dataBase");
         }
-        return true; // TODO
+        return true;
     }
 
     public boolean newEdge(int v1, int v2, double weight, int flag, String desc) {
-        return true; // TODO
+        int cont = 0;
+        for ( Edge edgeAux: graph.getA() ) {
+            if ( edgeAux.v1 == v1 && edgeAux.v2 == v2 ) return false; 
+        }
+
+        for ( Vertex vertexAux: graph.getV() ) {
+            if ( vertexAux.name == v1 || vertexAux.name == v2 ) cont++;
+        }
+
+        if (cont != 2) {
+            return false;
+        } else {
+            if (flag == 2) {
+                graph.addToA(new Edge(v2, v1, weight, desc, flag));
+                saveGraph("dataBase");
+            } else {
+                graph.addToA(new Edge(v1, v2, weight, desc, flag));
+                saveGraph("dataBase");
+            }
+        }
+        return true;
     }
 
     public boolean removeVertex(int name) {
-        return true; // TODO
+        for ( Vertex v : graph.getV() ) {
+            synchronized(v) {
+                if (v.name == name) {
+                    for ( Edge e : graph.getA() ) {
+                        synchronized(e) {
+                            if (e.v1 == name || e.v2 == name) graph.getA().remove(e);
+                        }
+                    }
+                    graph.getV().remove(v);
+                    saveGraph("dataBase");                    
+                } else {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     public boolean removeEdge(int v1, int v2) {
-        return true; // TODO
+        for ( Edge e : graph.getA() ) {
+            synchronized(e) {
+                if (e.v1 == v1 && e.v2 == v2) {
+                    graph.getA().remove(e);
+                    saveGraph("dataBase");
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public boolean updateVertex(Vertex v, int name) {
-        return true; // TODO
+        if (v == null || v.name != name) return false;
+        
+        for ( Vertex vertexAux : graph.getV() ) {
+            if (vertexAux.name == name) {
+                vertexAux.desc = v.desc;
+                vertexAux.color = v.color;
+                vertexAux.weight = v.weight;
+                saveGraph("dataBase");
+                return true;         
+            }
+        }
+        return false;
     }
 
     public boolean updateEdge(Edge a, int v1, int v2) {
-        return true; // TODO
+        if (a == null || a.v1 != v1 || a.v2 != v2) return false;
+
+        for (Edge edgeAux: graph.getA()) {
+            if (edgeAux.v1 == v1 && edgeAux.v2 == v2) {
+                edgeAux.desc = a.desc;
+                edgeAux.weight = a.weight;
+                if (a.flag == 2 && edgeAux.flag != 2) {
+                    edgeAux.v1 = v2;
+                    edgeAux.v2 = v1;
+                }
+                saveGraph("dataBase");
+                return true;
+            }
+        }
+        return false;
     }
 
     public Edge getEdge(int v1, int v2) {
@@ -150,5 +225,40 @@ public class GraphHandler implements Operations.Iface {
             }
         }
         return listOfNeighboring;
+    }
+
+    private Graph initialHandler() {
+        Graph graph = readGraph("dataBase");
+        if (graph.getV().isEmpty()) {
+            return new Graph(new ArrayList<Vertex>(), new ArrayList<Edge>());
+        }
+        return graph;
+    }
+
+    public synchronized void saveGraph(String filePath) {
+        try {
+            FileOutputStream saveFile = new FileOutputStream("./" + filePath);
+            ObjectOutputStream stream = new ObjectOutputStream(saveFile);
+            stream.writeObject((Object)graph);
+            stream.close();
+        } catch (Exception exc) {
+            exc.printStackTrace();
+        }
+    }
+
+    public synchronized Graph readGraph(String filePath) {
+        Object obj = null;
+        try {
+            FileInputStream readFile = new FileInputStream("./" + filePath);
+            ObjectInputStream stream = new ObjectInputStream(readFile);
+            obj = stream.readObject();
+            stream.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        if(obj == null) {
+            return new Graph(new ArrayList<Vertex>(), new ArrayList<Edge>());
+        }
+        return (Graph)obj;
     }
 }
